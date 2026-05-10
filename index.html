@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Free Business Audit — Find Your Revenue Leaks</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { min-height: 100vh; background: #0C0C12; color: #F0EDE8; font-family: Georgia, 'Times New Roman', serif; }
+    input { font-family: monospace; }
+    input::placeholder { color: #4A4844; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    @keyframes fadeUp { from { opacity:0; transform:translateY(14px); } to { opacity:1; transform:translateY(0); } }
+    .fade { animation: fadeUp .45s ease; }
+    .screen { min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 2rem 1.25rem; position: relative; z-index: 1; }
+    .col { display: flex; flex-direction: column; width: 100%; }
+    .badge { display: inline-block; padding: .3rem .9rem; background: #FF6B3520; border: 1px solid #FF6B3550; border-radius: 100px; font-size: .66rem; letter-spacing: .13em; color: #FF6B35; font-family: monospace; text-transform: uppercase; }
+    .cta-btn { padding: .9rem 2.2rem; background: #FF6B35; color: #fff; border: none; border-radius: 12px; font-size: 1rem; font-weight: 600; cursor: pointer; font-family: Georgia, serif; box-shadow: 0 8px 32px #FF6B3540; transition: opacity .15s; }
+    .cta-btn:disabled { opacity: .35; cursor: not-allowed; }
+    .input { padding: .85rem 1rem; background: #FFFFFF08; border: 1px solid #FFFFFF18; border-radius: 10px; color: #F0EDE8; font-family: monospace; font-size: .92rem; outline: none; width: 100%; }
+    .card { padding: 1.1rem 1.15rem; background: #FFFFFF06; border: 1px solid #FFFFFF10; border-radius: 14px; display: flex; flex-direction: column; gap: 6px; }
+    .card-label { font-size: .62rem; letter-spacing: .15em; text-transform: uppercase; color: #6B6864; font-family: monospace; }
+    .opt-btn { display: flex; flex-direction: column; gap: 7px; padding: .9rem; background: #FFFFFF06; border: 1px solid #FFFFFF12; border-radius: 12px; cursor: pointer; text-align: left; color: #C0BCB6; font-family: Georgia, serif; transition: all .15s; width: 100%; }
+    .opt-btn.sel { background: #FF6B3518; border: 1px solid #FF6B3570; color: #F0EDE8; }
+    .spinner { width: 44px; height: 44px; border: 3px solid #FFFFFF10; border-top: 3px solid #FF6B35; border-radius: 50%; animation: spin 1s linear infinite; }
+    .tag { padding: .3rem .75rem; background: #6366F115; border: 1px solid #6366F130; border-radius: 99px; font-size: .78rem; color: #A5B4FC; font-family: monospace; }
+    .tool-tag { padding: .3rem .75rem; background: #FFFFFF0A; border: 1px solid #FFFFFF15; border-radius: 99px; font-size: .78rem; color: #C0BCB6; font-family: monospace; }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+<script type="text/babel">
+const { useState, useEffect } = React;
+
+const GHL_AFFILIATE_LINK = "https://www.gohighlevel.com?fp_ref=g5wma&fp_sid=quiz";
+const GHL_WEBHOOK_URL = "https://services.leadconnectorhq.com/hooks/ioye5na0Oa185ebNny93/webhook-trigger/16e2f387-d72e-4292-a46e-3774a74ab95d";
+
+const QUESTIONS = [
+  { id:"business_type", emoji:"🏢", question:"What type of business do you run?", options:[
+    {v:"local_service", icon:"🔧", l:"Local service (salon, gym, contractor, clinic)"},
+    {v:"coaching_consulting", icon:"🎓", l:"Coaching or consulting"},
+    {v:"real_estate", icon:"🏠", l:"Real estate or mortgage"},
+    {v:"ecommerce_retail", icon:"🛍️", l:"E-commerce or retail"},
+    {v:"agency_marketing", icon:"📱", l:"Agency or marketing services"},
+    {v:"other", icon:"💼", l:"Other / General small business"},
+  ]},
+  { id:"biggest_challenge", emoji:"🚧", question:"What's your #1 growth challenge right now?", options:[
+    {v:"not_enough_leads", icon:"📉", l:"Not getting enough leads"},
+    {v:"leads_falling_through", icon:"🕳️", l:"Leads come in but nothing converts"},
+    {v:"no_time", icon:"⏰", l:"Too busy to follow up consistently"},
+    {v:"hard_to_book", icon:"📅", l:"Hard to get people to book appointments"},
+  ]},
+  { id:"current_tools", emoji:"🛠️", question:"How are you currently managing leads and customers?", options:[
+    {v:"spreadsheets", icon:"📊", l:"Spreadsheets or sticky notes"},
+    {v:"email_only", icon:"📧", l:"Just email and my phone"},
+    {v:"multiple_tools", icon:"🔀", l:"Multiple tools that don't talk to each other"},
+    {v:"basic_crm", icon:"💾", l:"A basic CRM but it's not working well"},
+  ]},
+  { id:"monthly_leads", emoji:"📊", question:"How many new leads or inquiries do you get per month?", options:[
+    {v:"under_20", icon:"🌱", l:"Under 20 — just getting started"},
+    {v:"20_to_50", icon:"📈", l:"20–50 — steady but needs work"},
+    {v:"50_to_150", icon:"🔥", l:"50–150 — growing fast"},
+    {v:"150_plus", icon:"🚀", l:"150+ — volume is the problem"},
+  ]},
+  { id:"time_drain", emoji:"⏳", question:"What's stealing the most time from your week?", options:[
+    {v:"chasing_leads", icon:"📞", l:"Manually calling and texting leads"},
+    {v:"scheduling", icon:"🗓️", l:"Back-and-forth scheduling"},
+    {v:"social_reviews", icon:"⭐", l:"Managing reviews and social media"},
+    {v:"admin_invoicing", icon:"🧾", l:"Admin, invoicing, and paperwork"},
+  ]},
+];
+
+const SYSTEM_PROMPT = `You are a business automation consultant specializing in GoHighLevel (GHL). Generate a personalized Business Automation Audit based on quiz answers. Be SPECIFIC with dollar amounts. Make it feel like a real paid audit. Respond ONLY with valid JSON:
+{"headline":"Your [Business Type] Is Losing Est. $X,XXX/Month to Manual Work","summary":"2 sentences diagnosing their situation","monthly_loss":"e.g. $2,400–$4,800/mo","hours_lost":"e.g. 8–12 hrs/week","top_leak":"Single biggest problem in one punchy sentence","leaks":[{"title":"Leak title","detail":"1 sentence on problem and cost","fix":"Specific GHL feature that fixes this"},{"title":"Leak title","detail":"1 sentence","fix":"GHL feature"},{"title":"Leak title","detail":"1 sentence","fix":"GHL feature"}],"quick_wins":["Week 1 action","Week 1 action","Week 1 action"],"ghl_features":["Feature 1","Feature 2","Feature 3","Feature 4"],"roi_estimate":"Realistic ROI if they fix these leaks","cta_line":"One compelling sentence to start GHL free trial"}`;
+
+function App() {
+  const [screen, setScreen] = useState("landing");
+  const [qIdx, setQIdx] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [selected, setSelected] = useState(null);
+  const [lead, setLead] = useState({name:"",email:"",business:""});
+  const [leads, setLeads] = useState([]);
+  const [gateErr, setGateErr] = useState("");
+  const [plan, setPlan] = useState(null);
+
+  const go = (s) => setScreen(s);
+
+  function startQuiz() { setQIdx(0); setAnswers({}); setSelected(null); go("quiz"); }
+
+  function pickOpt(v) { setSelected(v); }
+
+  function nextQ() {
+    if (!selected) return;
+    const a = {...answers, [QUESTIONS[qIdx].id]: selected};
+    setAnswers(a);
+    setSelected(null);
+    if (qIdx < QUESTIONS.length - 1) setQIdx(qIdx+1);
+    else go("gate");
+  }
+
+  function submitGate() {
+    if (!lead.name.trim()) { setGateErr("Please enter your first name."); return; }
+    if (!lead.email.trim() || !lead.email.includes("@")) { setGateErr("Please enter a valid email."); return; }
+    if (!lead.business.trim()) { setGateErr("Please enter your business name."); return; }
+    setGateErr("");
+    const nl = {...lead, answers, timestamp: new Date().toISOString()};
+    setLeads(p => [...p, nl]);
+    if (GHL_WEBHOOK_URL) {
+      fetch(GHL_WEBHOOK_URL, {method:"POST", headers:{"Content-Type":"application/json"}, body:JSON.stringify(nl)}).catch(()=>{});
+    }
+    go("loading");
+    buildPlan(answers, lead);
+  }
+
+  async function buildPlan(a, l) {
+    try {
+      const res = await fetch("https://api.anthropic.com/v1/messages", {
+        method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({
+          model:"claude-sonnet-4-20250514", max_tokens:1200,
+          system: SYSTEM_PROMPT,
+          messages:[{role:"user", content:`Business type: ${a.business_type}\nChallenge: ${a.biggest_challenge}\nTools: ${a.current_tools}\nLeads/mo: ${a.monthly_leads}\nTime drain: ${a.time_drain}\nBusiness: ${l.business}`}]
+        })
+      });
+      const data = await res.json();
+      const text = data.content.map(b=>b.text||"").join("");
+      setPlan(JSON.parse(text.replace(/```json|```/g,"").trim()));
+      go("result");
+    } catch(e) {
+      alert("Something went wrong. Please try again.");
+      go("gate");
+    }
+  }
+
+  function retake() {
+    setScreen("landing"); setPlan(null); setAnswers({}); setQIdx(0);
+    setSelected(null); setLead({name:"",email:"",business:""}); setGateErr("");
+  }
+
+  if (screen === "landing") return (
+    <div className="screen">
+      <div className="col fade" style={{maxWidth:540, alignItems:"center", textAlign:"center", gap:18}}>
+        <div className="badge">Free Business Audit · 2 Minutes</div>
+        <h1 style={{fontSize:"clamp(2rem,6vw,3.2rem)", fontWeight:400, lineHeight:1.12, letterSpacing:"-.02em"}}>
+          Is Your Business<br/><span style={{color:"#FF6B35",fontStyle:"italic"}}>Leaking Revenue?</span>
+        </h1>
+        <p style={{fontSize:".97rem", color:"#A09C96", lineHeight:1.75, maxWidth:440}}>
+          Answer 5 questions and get a free personalized audit showing exactly where your business is losing time and money — and how to fix it.
+        </p>
+        <div style={{display:"flex", gap:"2rem", justifyContent:"center", padding:"1rem 2rem", background:"#FFFFFF08", borderRadius:16, border:"1px solid #FFFFFF10", width:"100%"}}>
+          {[["5","Questions"],["Free","Audit"],["Instant","Results"]].map(([n,l])=>(
+            <div key={l} style={{display:"flex",flexDirection:"column",alignItems:"center",gap:3}}>
+              <span style={{fontSize:"1.3rem",fontWeight:500,color:"#FF6B35",fontFamily:"monospace"}}>{n}</span>
+              <span style={{fontSize:".66rem",color:"#6B6864",letterSpacing:".1em",textTransform:"uppercase",fontFamily:"monospace"}}>{l}</span>
+            </div>
+          ))}
+        </div>
+        <div className="col" style={{gap:8, maxWidth:400, width:"100%"}}>
+          {["Stop losing leads to slow follow-up","See exactly which tasks to automate first","Get a personalized automation roadmap"].map(p=>(
+            <div key={p} style={{display:"flex",alignItems:"center",gap:10,fontSize:".88rem",color:"#C0BCB6"}}>
+              <span style={{color:"#FF6B35"}}>✓</span>{p}
+            </div>
+          ))}
+        </div>
+        <button className="cta-btn" onClick={startQuiz}>Get My Free Audit →</button>
+        <p style={{fontSize:".72rem",color:"#4A4844",fontFamily:"monospace"}}>No credit card. No commitment. 100% free.</p>
+      </div>
+    </div>
+  );
+
+  if (screen === "quiz") {
+    const q = QUESTIONS[qIdx];
+    return (
+      <div className="screen">
+        <div className="col fade" style={{maxWidth:560, gap:18}}>
+          <div style={{display:"flex",alignItems:"center",gap:12}}>
+            <div style={{flex:1,height:3,background:"#FFFFFF10",borderRadius:99,overflow:"hidden"}}>
+              <div style={{height:"100%",background:"#FF6B35",borderRadius:99,width:`${(qIdx/QUESTIONS.length)*100}%`,transition:"width .4s ease"}}/>
+            </div>
+            <span style={{fontSize:".72rem",color:"#6B6864",fontFamily:"monospace",whiteSpace:"nowrap"}}>{qIdx+1} / {QUESTIONS.length}</span>
+          </div>
+          <div style={{fontSize:"2.2rem"}}>{q.emoji}</div>
+          <h2 style={{fontSize:"clamp(1.3rem,3.5vw,1.8rem)",fontWeight:400,lineHeight:1.25,letterSpacing:"-.02em"}}>{q.question}</h2>
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+            {q.options.map(o=>(
+              <button key={o.v} className={`opt-btn${selected===o.v?" sel":""}`} onClick={()=>pickOpt(o.v)}>
+                <span style={{fontSize:"1.3rem"}}>{o.icon}</span>
+                <span style={{fontSize:".82rem",lineHeight:1.3,fontFamily:"monospace"}}>{o.l}</span>
+              </button>
+            ))}
+          </div>
+          <button className="cta-btn" onClick={nextQ} disabled={!selected}>
+            {qIdx===QUESTIONS.length-1?"Show My Audit →":"Next →"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (screen === "gate") return (
+    <div className="screen">
+      <div className="col fade" style={{maxWidth:420,alignItems:"center",textAlign:"center",gap:18}}>
+        <div style={{fontSize:"2.8rem"}}>📋</div>
+        <h2 style={{fontSize:"1.9rem",fontWeight:400,letterSpacing:"-.02em"}}>Your audit is ready.</h2>
+        <p style={{fontSize:".93rem",color:"#A09C96",lineHeight:1.65}}>Where should we send your personalized Business Automation Report?</p>
+        <div className="col" style={{gap:9,width:"100%"}}>
+          <input className="input" type="text" placeholder="Your first name" value={lead.name} onChange={e=>setLead(l=>({...l,name:e.target.value}))}/>
+          <input className="input" type="text" placeholder="Business name" value={lead.business} onChange={e=>setLead(l=>({...l,business:e.target.value}))}/>
+          <input className="input" type="email" placeholder="Email address" value={lead.email} onChange={e=>setLead(l=>({...l,email:e.target.value}))}/>
+          {gateErr && <div style={{padding:".6rem .9rem",background:"#FF444415",border:"1px solid #FF444440",borderRadius:8,fontSize:".82rem",color:"#FF8888",fontFamily:"monospace"}}>{gateErr}</div>}
+          <button className="cta-btn" onClick={submitGate}>Unlock My Audit →</button>
+        </div>
+        <p style={{fontSize:".72rem",color:"#4A4844",fontFamily:"monospace"}}>No spam. Unsubscribe anytime.</p>
+      </div>
+    </div>
+  );
+
+  if (screen === "loading") {
+    const steps = ["Analyzing your business profile…","Calculating revenue leaks…","Identifying automation opportunities…","Building your custom audit…"];
+    return <LoadingScreen steps={steps}/>;
+  }
+
+  if (screen === "result" && plan) return (
+    <div style={{minHeight:"100vh",padding:"2rem 1.25rem",display:"flex",justifyContent:"center"}}>
+      <div className="col fade" style={{maxWidth:600,gap:16,paddingBottom:"3rem"}}>
+
+        <div className="col" style={{alignItems:"center",textAlign:"center",gap:10,paddingTop:"1rem"}}>
+          <div className="badge">📋 Your Business Audit Results</div>
+          <h1 style={{fontSize:"clamp(1.5rem,4vw,2.3rem)",fontWeight:400,lineHeight:1.2,letterSpacing:"-.02em"}}>{plan.headline}</h1>
+          <p style={{fontSize:".93rem",color:"#A09C96",lineHeight:1.65}}>{plan.summary}</p>
+        </div>
+
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:12}}>
+          <div style={{padding:"1.1rem",background:"#FF6B3512",border:"1px solid #FF6B3530",borderRadius:14,display:"flex",flexDirection:"column",gap:4,alignItems:"center",textAlign:"center"}}>
+            <span style={{fontSize:".62rem",letterSpacing:".15em",textTransform:"uppercase",color:"#FF6B35",fontFamily:"monospace"}}>Monthly Loss</span>
+            <span style={{fontSize:"1.8rem",fontWeight:500,color:"#FF6B35",fontFamily:"monospace"}}>{plan.monthly_loss}</span>
+          </div>
+          <div style={{padding:"1.1rem",background:"#FFFFFF06",border:"1px solid #FFFFFF10",borderRadius:14,display:"flex",flexDirection:"column",gap:4,alignItems:"center",textAlign:"center"}}>
+            <span style={{fontSize:".62rem",letterSpacing:".15em",textTransform:"uppercase",color:"#6B6864",fontFamily:"monospace"}}>Hours Lost/Week</span>
+            <span style={{fontSize:"1.8rem",fontWeight:500,color:"#F0EDE8",fontFamily:"monospace"}}>{plan.hours_lost}</span>
+          </div>
+        </div>
+
+        <div style={{padding:"1rem 1.15rem",background:"#FF6B3510",border:"1px solid #FF6B3530",borderRadius:12}}>
+          <span style={{fontSize:".62rem",letterSpacing:".15em",textTransform:"uppercase",color:"#FF6B35",fontFamily:"monospace"}}>🚨 Biggest Leak</span>
+          <p style={{margin:".4rem 0 0",fontSize:"1rem",color:"#F0EDE8",lineHeight:1.5,fontStyle:"italic"}}>{plan.top_leak}</p>
+        </div>
+
+        <div style={{fontSize:".62rem",letterSpacing:".2em",textTransform:"uppercase",color:"#4A4844",fontFamily:"monospace",paddingTop:4}}>Where You're Losing Money</div>
+        {plan.leaks.map((leak,i)=>(
+          <div key={i} className="card">
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",gap:10}}>
+              <span style={{fontSize:".95rem",fontWeight:500,color:"#F0EDE8"}}>{leak.title}</span>
+              <span style={{fontSize:".68rem",padding:".2rem .6rem",background:"#FF6B3515",border:"1px solid #FF6B3530",borderRadius:99,color:"#FF6B35",fontFamily:"monospace",flexShrink:0}}>Leak #{i+1}</span>
+            </div>
+            <p style={{margin:0,fontSize:".84rem",color:"#A09C96",lineHeight:1.5}}>{leak.detail}</p>
+            <div style={{display:"flex",alignItems:"center",gap:7,fontSize:".78rem",color:"#10B981",fontFamily:"monospace"}}>
+              <span>✓ Fix:</span><span>{leak.fix}</span>
+            </div>
+          </div>
+        ))}
+
+        <div style={{padding:"1.1rem",background:"#10B98112",border:"1px solid #10B98130",borderRadius:14}}>
+          <div style={{fontSize:".62rem",letterSpacing:".15em",textTransform:"uppercase",color:"#10B981",fontFamily:"monospace",marginBottom:10}}>⚡ Quick Wins — Implement This Week</div>
+          {plan.quick_wins.map((w,i)=>(
+            <div key={i} style={{display:"flex",gap:8,fontSize:".85rem",color:"#C0BCB6",lineHeight:1.45,marginBottom:7}}>
+              <span style={{color:"#10B981",flexShrink:0}}>→</span>{w}
+            </div>
+          ))}
+        </div>
+
+        <div className="card">
+          <div className="card-label">🛠️ GHL Features That Solve This</div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:7}}>
+            {plan.ghl_features.map(f=><span key={f} className="tag">{f}</span>)}
+          </div>
+        </div>
+
+        <div style={{padding:"1.1rem",background:"#F59E0B10",border:"1px solid #F59E0B30",borderRadius:14}}>
+          <div style={{fontSize:".62rem",letterSpacing:".15em",textTransform:"uppercase",color:"#F59E0B",fontFamily:"monospace",marginBottom:6}}>💰 Your ROI Potential</div>
+          <p style={{margin:0,fontSize:".93rem",color:"#F0EDE8",lineHeight:1.6}}>{plan.roi_estimate}</p>
+        </div>
+
+        <div style={{padding:"1.5rem",background:"linear-gradient(135deg,#FF6B3520,#FF6B3508)",border:"1px solid #FF6B3540",borderRadius:16,display:"flex",flexDirection:"column",gap:12,alignItems:"center",textAlign:"center"}}>
+          <h3 style={{fontSize:"1.2rem",fontWeight:400,color:"#F0EDE8",lineHeight:1.3}}>{plan.cta_line}</h3>
+          <p style={{fontSize:".85rem",color:"#A09C96"}}>14-day free trial · No credit card required · Cancel anytime</p>
+          <a href={GHL_AFFILIATE_LINK} target="_blank" rel="noopener noreferrer"
+            style={{padding:".9rem 2.2rem",background:"#FF6B35",color:"#fff",borderRadius:12,fontSize:"1rem",fontWeight:600,textDecoration:"none",display:"inline-block",boxShadow:"0 8px 32px #FF6B3540"}}>
+            Start My Free 14-Day Trial →
+          </a>
+          <p style={{fontSize:".72rem",color:"#4A4844",fontFamily:"monospace"}}>Trusted by 60,000+ businesses worldwide</p>
+        </div>
+
+        <button onClick={retake} style={{padding:".7rem 1.5rem",background:"transparent",border:"1px solid #FFFFFF18",borderRadius:10,color:"#6B6864",fontFamily:"monospace",fontSize:".83rem",cursor:"pointer",alignSelf:"center"}}>
+          ↩ Start Over
+        </button>
+
+        {leads.length > 0 && (
+          <div style={{padding:"1.1rem",background:"#10B98110",border:"1px solid #10B98128",borderRadius:14,display:"flex",flexDirection:"column",gap:9,marginTop:8}}>
+            <div style={{fontSize:".65rem",letterSpacing:".12em",textTransform:"uppercase",color:"#10B981",fontFamily:"monospace",fontWeight:700}}>📋 Leads Captured ({leads.length})</div>
+            {leads.map((l,i)=>(
+              <div key={i} style={{display:"flex",gap:10,padding:".4rem 0",borderTop:"1px solid #FFFFFF08",flexWrap:"wrap"}}>
+                <span style={{fontSize:".82rem",color:"#F0EDE8",fontFamily:"monospace",minWidth:80}}>{l.name}</span>
+                <span style={{fontSize:".82rem",color:"#10B981",fontFamily:"monospace",flex:1}}>{l.email}</span>
+                <span style={{fontSize:".72rem",color:"#4A4844",fontFamily:"monospace"}}>{l.business}</span>
+              </div>
+            ))}
+          </div>
+        )}
+
+      </div>
+    </div>
+  );
+
+  return null;
+}
+
+function LoadingScreen({steps}) {
+  const [step, setStep] = useState(0);
+  useEffect(()=>{
+    const t = setInterval(()=>setStep(s=>Math.min(s+1,steps.length-1)),950);
+    return ()=>clearInterval(t);
+  },[]);
+  return (
+    <div className="screen" style={{justifyContent:"center"}}>
+      <div className="col fade" style={{alignItems:"center",textAlign:"center",gap:22,maxWidth:300}}>
+        <div className="spinner"/>
+        <h2 style={{fontSize:"1.3rem",fontWeight:400,letterSpacing:"-.02em"}}>Running Your Audit</h2>
+        <div className="col" style={{gap:7,textAlign:"left"}}>
+          {steps.map((st,i)=>(
+            <div key={st} style={{fontSize:".82rem",color:i<=step?"#A09C96":"#2A2826",fontFamily:"monospace",transition:"color .4s"}}>
+              <span style={{color:"#FF6B35",marginRight:7}}>{i<=step?"✓":"○"}</span>{st}
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
